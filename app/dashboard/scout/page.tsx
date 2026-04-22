@@ -17,6 +17,13 @@ function scheduleHref(matchId: number) {
   return `/dashboard/schedule?highlight=${matchId}`;
 }
 
+function isPast(m: MatchObj, now: Date): boolean {
+  if (m.scored) return true;
+  if (m.scheduled && new Date(m.scheduled).getTime() < now.getTime() - 5 * 60 * 1000)
+    return true;
+  return false;
+}
+
 export default async function ScoutPage() {
   const ctx = await getDashboardContext();
   if (!ctx.ok) {
@@ -48,36 +55,41 @@ export default async function ScoutPage() {
     for (const o of opponents) opponentIds.set(o.id, o.number);
   }
 
-  const otherUpcomingByTeam = new Map<number, MatchObj[]>();
   const relevantTeams = new Set<number>([
     ...partnerIds.keys(),
     ...opponentIds.keys(),
   ]);
+
+  // For each partner/opponent, pull a window of their matches around "now":
+  // up to 2 most recent scored matches + up to 4 upcoming. This way scouts
+  // can see recent form as well as what's coming.
+  const otherByTeam = new Map<number, MatchObj[]>();
   for (const otherId of relevantTeams) {
-    otherUpcomingByTeam.set(
+    const theirs = allMatches.filter(
+      (m) => findTeamSide(m, otherId) !== null && !myMatches.includes(m),
+    );
+    const past = theirs.filter((m) => isPast(m, now)).slice(-2);
+    const future = upcomingMatches(theirs, now).slice(0, 4);
+    otherByTeam.set(otherId, [...past, ...future]);
+  }
+
+  // "With you" is every match (past or upcoming) where my team plays with/against the other team.
+  const sharedByTeam = new Map<number, MatchObj[]>();
+  for (const otherId of relevantTeams) {
+    sharedByTeam.set(
       otherId,
-      upcomingMatches(
-        allMatches.filter(
-          (m) => findTeamSide(m, otherId) !== null && !myMatches.includes(m),
+      myMatches.filter((m) =>
+        m.alliances.some((a) =>
+          a.teams.some((t) => t.team?.id === otherId),
         ),
-        now,
-      ).slice(0, 4),
+      ),
     );
   }
 
   const matchIds = new Set<number>();
-  for (const m of myUpcoming) matchIds.add(m.id);
-  for (const ms of otherUpcomingByTeam.values()) {
-    for (const m of ms) matchIds.add(m.id);
-  }
+  for (const ms of otherByTeam.values()) for (const m of ms) matchIds.add(m.id);
+  for (const ms of sharedByTeam.values()) for (const m of ms) matchIds.add(m.id);
   const notes = await getNotesForTeam([...matchIds]);
-
-  const sharedMatchesWith = (otherId: number) =>
-    myUpcoming.filter(
-      (m) =>
-        (partnerByMatch.get(m.id) ?? []).some((t) => t.id === otherId) ||
-        (opponentByMatch.get(m.id) ?? []).some((t) => t.id === otherId),
-    );
 
   return (
     <div className="grid grid-cols-1 gap-12">
@@ -95,8 +107,8 @@ export default async function ScoutPage() {
               number,
             }))}
             myTeamId={team.id}
-            shared={sharedMatchesWith}
-            others={(id) => otherUpcomingByTeam.get(id) ?? []}
+            shared={(id) => sharedByTeam.get(id) ?? []}
+            others={(id) => otherByTeam.get(id) ?? []}
             notes={notes}
             now={now}
             tone="partner"
@@ -118,8 +130,8 @@ export default async function ScoutPage() {
               number,
             }))}
             myTeamId={team.id}
-            shared={sharedMatchesWith}
-            others={(id) => otherUpcomingByTeam.get(id) ?? []}
+            shared={(id) => sharedByTeam.get(id) ?? []}
+            others={(id) => otherByTeam.get(id) ?? []}
             notes={notes}
             now={now}
             tone="opponent"
@@ -182,17 +194,60 @@ function TeamGrid({
             ) : null}
 
             <MatchGroup
-              label="Their other upcoming"
+              label="Their recent & upcoming"
               matches={otherMatches}
               myTeamId={myTeamId}
               notes={notes}
               now={now}
-              emptyLabel="No other upcoming matches."
+              emptyLabel="No other matches at this event."
             />
           </div>
         );
       })}
     </div>
+  );
+}
+
+function MatchResult({
+  match,
+  mySide,
+}: {
+  match: MatchObj;
+  mySide: "red" | "blue" | null;
+}) {
+  const red = match.alliances.find((a) => a.color === "red");
+  const blue = match.alliances.find((a) => a.color === "blue");
+  const mine = mySide ? match.alliances.find((a) => a.color === mySide) : null;
+  const opp = mySide ? match.alliances.find((a) => a.color !== mySide) : null;
+  const outcome =
+    mine && opp
+      ? mine.score > opp.score
+        ? "W"
+        : mine.score < opp.score
+          ? "L"
+          : "T"
+      : null;
+  const outcomeCls =
+    outcome === "W"
+      ? "border-blue text-blue bg-blue-soft"
+      : outcome === "L"
+        ? "border-red text-red bg-red-soft"
+        : outcome === "T"
+          ? "border-fg"
+          : "";
+  return (
+    <span className="flex items-center gap-2 font-mono">
+      <span className="text-red font-semibold">{red?.score ?? "—"}</span>
+      <span className="text-muted">–</span>
+      <span className="text-blue font-semibold">{blue?.score ?? "—"}</span>
+      {outcome ? (
+        <span
+          className={`inline-block w-5 text-center border text-[10px] font-semibold ${outcomeCls}`}
+        >
+          {outcome}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -225,8 +280,12 @@ function MatchGroup({
           {matches.map((m) => {
             const note = notes.get(m.id);
             const side = includeSideBadge ? findTeamSide(m, myTeamId) : null;
+            const past = isPast(m, now);
             return (
-              <li key={m.id} className="py-2 flex flex-col gap-2">
+              <li
+                key={m.id}
+                className={`py-2 flex flex-col gap-2 ${past && !m.scored ? "opacity-60" : ""}`}
+              >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="flex items-baseline gap-2 min-w-0">
                     <Link
@@ -244,8 +303,14 @@ function MatchGroup({
                       />
                     ) : null}
                   </span>
-                  <span className="text-xs text-muted whitespace-nowrap">
-                    {fmtTime(m.scheduled)} · {relativeTime(m.scheduled, now)}
+                  <span className="text-xs text-muted whitespace-nowrap flex items-center gap-2">
+                    {m.scored ? (
+                      <MatchResult match={m} mySide={side} />
+                    ) : (
+                      <>
+                        {fmtTime(m.scheduled)} · {relativeTime(m.scheduled, now)}
+                      </>
+                    )}
                   </span>
                 </div>
                 <MatchNotes
