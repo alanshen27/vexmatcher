@@ -5,7 +5,6 @@ import type { MatchObj } from "../../lib/robotevents";
 import { getDashboardContext } from "../_shared/context";
 import { EmptyState, ErrorBox, Section } from "../_shared/ui";
 import ScrollToHighlight from "./ScrollToHighlight";
-import { useState } from "react";
 
 const PAGE_SIZE = 25;
 
@@ -259,8 +258,6 @@ function ScheduleList({
   now: Date;
   highlights: Set<number>;
 }) {
-
-  const [lastDay, setLastDay] = useState<string | null>(null);
   if (matches.length === 0) {
     return (
       <div className="border border-line p-8 text-center text-sm text-muted">
@@ -269,12 +266,14 @@ function ScheduleList({
     );
   }
 
+  const dayOf = (m: MatchObj) =>
+    m.scheduled ? fmtDay(m.scheduled) : "Unscheduled";
+
   return (
     <ul className="border border-line divide-y divide-line">
-      {matches.map((m) => {
-        const day = m.scheduled ? fmtDay(m.scheduled) : "Unscheduled";
-        const showDayHeader = day !== lastDay && lastDay !== null;
-        setLastDay(day);
+      {matches.map((m, i) => {
+        const day = dayOf(m);
+        const showDayHeader = i === 0 || dayOf(matches[i - 1]) !== day;
         const mine = findTeamSide(m, myTeamId) !== null;
         const past =
           m.scored ||
@@ -292,7 +291,7 @@ function ScheduleList({
               id={`match-${m.id}`}
               className={`p-3 grid grid-cols-[4.5rem_1fr_auto] gap-3 items-center scroll-mt-32 ${
                 highlighted
-                  ? "ring-2 ring-accent ring-offset-0 bg-subtle outline outline-1 outline-accent"
+                  ? "ring-2 ring-accent ring-offset-0 bg-subtle"
                   : mine
                     ? "bg-subtle/60"
                     : ""
