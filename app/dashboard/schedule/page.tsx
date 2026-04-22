@@ -5,6 +5,7 @@ import type { MatchObj } from "../../lib/robotevents";
 import { getDashboardContext } from "../_shared/context";
 import { EmptyState, ErrorBox, Section } from "../_shared/ui";
 import ScrollToHighlight from "./ScrollToHighlight";
+import { useState } from "react";
 
 const PAGE_SIZE = 25;
 
@@ -258,6 +259,8 @@ function ScheduleList({
   now: Date;
   highlights: Set<number>;
 }) {
+
+  const [lastDay, setLastDay] = useState<string | null>(null);
   if (matches.length === 0) {
     return (
       <div className="border border-line p-8 text-center text-sm text-muted">
@@ -266,13 +269,12 @@ function ScheduleList({
     );
   }
 
-  let lastDay = "";
   return (
     <ul className="border border-line divide-y divide-line">
       {matches.map((m) => {
         const day = m.scheduled ? fmtDay(m.scheduled) : "Unscheduled";
-        const showDayHeader = day !== lastDay;
-        lastDay = day;
+        const showDayHeader = day !== lastDay && lastDay !== null;
+        setLastDay(day);
         const mine = findTeamSide(m, myTeamId) !== null;
         const past =
           m.scored ||
