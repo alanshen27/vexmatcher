@@ -39,7 +39,7 @@ export default async function ScoutPage() {
     return <ErrorBox message={ctx.error ?? "Unknown error"} />;
   }
 
-  const { team, matches: allMatches, now } = ctx;
+  const { team, matches: allMatches, now, tz } = ctx;
   const myMatches = matchesForTeam(allMatches, team.id);
   const myUpcoming = upcomingMatches(myMatches, now).slice(0, 8);
 
@@ -111,6 +111,7 @@ export default async function ScoutPage() {
             others={(id) => otherByTeam.get(id) ?? []}
             notes={notes}
             now={now}
+            tz={tz}
             tone="partner"
           />
         )}
@@ -134,6 +135,7 @@ export default async function ScoutPage() {
             others={(id) => otherByTeam.get(id) ?? []}
             notes={notes}
             now={now}
+            tz={tz}
             tone="opponent"
           />
         )}
@@ -149,6 +151,7 @@ function TeamGrid({
   others,
   notes,
   now,
+  tz,
   tone,
 }: {
   teams: { id: number; number: string }[];
@@ -157,6 +160,7 @@ function TeamGrid({
   others: (id: number) => MatchObj[];
   notes: Map<number, MatchNote>;
   now: Date;
+  tz: string | null;
   tone: "partner" | "opponent";
 }) {
   const sorted = [...teams].sort((a, b) =>
@@ -189,6 +193,7 @@ function TeamGrid({
                 myTeamId={myTeamId}
                 notes={notes}
                 now={now}
+                tz={tz}
                 includeSideBadge
               />
             ) : null}
@@ -199,6 +204,7 @@ function TeamGrid({
               myTeamId={myTeamId}
               notes={notes}
               now={now}
+              tz={tz}
               emptyLabel="No other matches at this event."
             />
           </div>
@@ -257,6 +263,7 @@ function MatchGroup({
   myTeamId,
   notes,
   now,
+  tz,
   emptyLabel,
   includeSideBadge,
 }: {
@@ -265,6 +272,7 @@ function MatchGroup({
   myTeamId: number;
   notes: Map<number, MatchNote>;
   now: Date;
+  tz: string | null;
   emptyLabel?: string;
   includeSideBadge?: boolean;
 }) {
@@ -308,7 +316,8 @@ function MatchGroup({
                       <MatchResult match={m} mySide={side} />
                     ) : (
                       <>
-                        {fmtTime(m.scheduled)} · {relativeTime(m.scheduled, now)}
+                        {fmtTime(m.scheduled, tz ?? undefined)} ·{" "}
+                        {relativeTime(m.scheduled, now)}
                       </>
                     )}
                   </span>

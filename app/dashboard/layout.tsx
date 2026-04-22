@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
-import { readTeamCookie } from "../lib/cookies";
+import { readTeamCookie, readTimezoneCookie } from "../lib/cookies";
 import { resetTeamAction } from "../onboarding/actions";
 import NavTabs from "./_shared/NavTabs";
+import TimezonePicker from "./_shared/TimezonePicker";
 import { getDashboardContext } from "./_shared/context";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function DashboardLayout({
   const team = await readTeamCookie();
   if (!team) redirect("/onboarding");
 
+  const tz = await readTimezoneCookie();
   const ctx = await getDashboardContext();
   const eventName = ctx.ok ? ctx.event.name : undefined;
   const eventLocation = ctx.ok
@@ -44,14 +46,17 @@ export default async function DashboardLayout({
               </p>
             ) : null}
           </div>
-          <form action={resetTeamAction}>
-            <button
-              type="submit"
-              className="text-xs uppercase tracking-widest border border-line px-3 py-2 hover:bg-subtle transition-colors"
-            >
-              Switch team
-            </button>
-          </form>
+          <div className="flex items-center gap-2">
+            <TimezonePicker current={tz} />
+            <form action={resetTeamAction}>
+              <button
+                type="submit"
+                className="text-xs uppercase tracking-widest border border-line px-3 py-2 hover:bg-subtle transition-colors"
+              >
+                Switch team
+              </button>
+            </form>
+          </div>
         </div>
         <div className="max-w-5xl mx-auto px-6 pb-4">
           <NavTabs />

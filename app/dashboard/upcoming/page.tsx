@@ -32,7 +32,7 @@ export default async function UpcomingPage() {
     return <ErrorBox message={ctx.error ?? "Unknown error"} />;
   }
 
-  const { team, matches: allMatches, now } = ctx;
+  const { team, matches: allMatches, now, tz } = ctx;
   const myMatches = matchesForTeam(allMatches, team.id);
   const myUpcoming = upcomingMatches(myMatches, now).slice(0, 8);
   const myRecent = myMatches
@@ -81,7 +81,7 @@ export default async function UpcomingPage() {
                     </div>
                     <div className="text-right">
                       <div className="font-mono text-sm">
-                        {fmtTime(m.scheduled)}
+                        {fmtTime(m.scheduled, tz ?? undefined)}
                       </div>
                       <div className="text-xs text-muted">
                         {relativeTime(m.scheduled, now)}

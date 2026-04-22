@@ -1,17 +1,18 @@
-export function fmtTime(iso?: string): string {
+export function fmtTime(iso?: string, tz?: string): string {
   if (!iso) return "TBD";
   try {
     const d = new Date(iso);
     return d.toLocaleTimeString(undefined, {
       hour: "numeric",
       minute: "2-digit",
+      timeZone: tz,
     });
   } catch {
     return iso;
   }
 }
 
-export function fmtDay(iso?: string): string {
+export function fmtDay(iso?: string, tz?: string): string {
   if (!iso) return "TBD";
   try {
     const d = new Date(iso);
@@ -19,15 +20,16 @@ export function fmtDay(iso?: string): string {
       weekday: "short",
       month: "short",
       day: "numeric",
+      timeZone: tz,
     });
   } catch {
     return iso;
   }
 }
 
-export function fmtDayTime(iso?: string): string {
+export function fmtDayTime(iso?: string, tz?: string): string {
   if (!iso) return "TBD";
-  return `${fmtDay(iso)} · ${fmtTime(iso)}`;
+  return `${fmtDay(iso, tz)} · ${fmtTime(iso, tz)}`;
 }
 
 export function relativeTime(iso?: string, now: Date = new Date()): string {

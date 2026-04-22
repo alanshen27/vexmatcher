@@ -35,7 +35,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const mineOnly = firstStr(sp.mine) === "1";
   const pageParam = firstStr(sp.page);
   const highlights = parseHighlights(sp.highlight);
-  const { team, event, matches: allMatches, now } = ctx;
+  const { team, event, matches: allMatches, now, tz } = ctx;
 
   const filtered = mineOnly
     ? allMatches.filter((m) => findTeamSide(m, team.id) !== null)
@@ -104,6 +104,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         matches={pageMatches}
         myTeamId={team.id}
         now={now}
+        tz={tz}
         highlights={highlights}
       />
 
@@ -251,11 +252,13 @@ function ScheduleList({
   matches,
   myTeamId,
   now,
+  tz,
   highlights,
 }: {
   matches: MatchObj[];
   myTeamId: number;
   now: Date;
+  tz: string | null;
   highlights: Set<number>;
 }) {
   if (matches.length === 0) {
@@ -267,7 +270,7 @@ function ScheduleList({
   }
 
   const dayOf = (m: MatchObj) =>
-    m.scheduled ? fmtDay(m.scheduled) : "Unscheduled";
+    m.scheduled ? fmtDay(m.scheduled, tz ?? undefined) : "Unscheduled";
 
   return (
     <ul className="border border-line divide-y divide-line">
@@ -297,7 +300,9 @@ function ScheduleList({
                     : ""
               } ${past && !highlighted ? "opacity-60" : ""}`}
             >
-              <span className="font-mono text-xs">{fmtTime(m.scheduled)}</span>
+              <span className="font-mono text-xs">
+                {fmtTime(m.scheduled, tz ?? undefined)}
+              </span>
               <span className="text-sm min-w-0">
                 <span className="font-mono">{shortMatchName(m)}</span>
                 {m.field ? (
