@@ -1,0 +1,24 @@
+// Prisma schema for vex_matcher
+//
+// Notes + "done" checkbox per (team, match), stored in Postgres (Supabase).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model MatchNote {
+  teamId    Int
+  matchId   Int
+  done      Boolean  @default(false)
+  notes     String   @default("")
+  updatedAt DateTime @updatedAt
+
+  @@id([teamId, matchId])
+  @@index([teamId])
+}
