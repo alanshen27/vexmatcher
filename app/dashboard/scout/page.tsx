@@ -12,9 +12,21 @@ import { EmptyState, ErrorBox, Hint, Section, SideBadge } from "../_shared/ui";
 import MatchNotes from "../MatchNotes";
 import { getNotesForTeam } from "../notes-actions";
 import type { MatchNote } from "../notes-types";
+import ScrollToTeam from "./ScrollToTeam";
+
+type PageProps = {
+  searchParams: Promise<{
+    highlight?: string | string[];
+  }>;
+};
 
 function scheduleHref(matchId: number) {
   return `/dashboard/schedule?highlight=${matchId}`;
+}
+
+function firstStr(v: string | string[] | undefined): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return v;
 }
 
 function isPast(m: MatchObj, now: Date): boolean {
@@ -24,7 +36,7 @@ function isPast(m: MatchObj, now: Date): boolean {
   return false;
 }
 
-export default async function ScoutPage() {
+export default async function ScoutPage({ searchParams }: PageProps) {
   const ctx = await getDashboardContext();
   if (!ctx.ok) {
     if (ctx.reason === "no-event") {
@@ -91,8 +103,54 @@ export default async function ScoutPage() {
   for (const ms of sharedByTeam.values()) for (const m of ms) matchIds.add(m.id);
   const notes = await getNotesForTeam([...matchIds]);
 
+  // ?highlight=<matchId> → spotlight every partner/opponent from that match.
+  const sp = await searchParams;
+  const highlightMatchId = Number(firstStr(sp.highlight)) || null;
+  const highlightMatch = highlightMatchId
+    ? allMatches.find((m) => m.id === highlightMatchId) ?? null
+    : null;
+  const highlightedTeamIds = new Set<number>();
+  if (highlightMatch) {
+    for (const a of highlightMatch.alliances) {
+      for (const t of a.teams) {
+        if (t.team && t.team.id !== team.id) {
+          highlightedTeamIds.add(t.team.id);
+        }
+      }
+    }
+  }
+  const firstHighlightedId =
+    [...partnerIds.keys(), ...opponentIds.keys()].find((id) =>
+      highlightedTeamIds.has(id),
+    ) ?? null;
+
   return (
     <div className="grid grid-cols-1 gap-12">
+      {highlightMatch ? (
+        <div className="flex items-center justify-between gap-3 border border-accent bg-subtle px-4 py-3">
+          <div className="flex flex-col">
+            <span className="text-[10px] uppercase tracking-[0.3em] text-muted">
+              Scouting focus
+            </span>
+            <span className="text-sm">
+              Highlighting teams from{" "}
+              <span className="font-mono font-semibold">
+                {shortMatchName(highlightMatch)}
+              </span>
+              {highlightedTeamIds.size > 0
+                ? ` · ${highlightedTeamIds.size} team${highlightedTeamIds.size === 1 ? "" : "s"}`
+                : ""}
+            </span>
+          </div>
+          <Link
+            href="/dashboard/scout"
+            className="text-xs uppercase tracking-widest border border-line bg-bg px-3 py-2 hover:bg-subtle transition-colors"
+          >
+            Clear
+          </Link>
+        </div>
+      ) : null}
+
       <Section
         eyebrow="Your alliance partners"
         title="Teammates next up"
@@ -113,6 +171,8 @@ export default async function ScoutPage() {
             now={now}
             tz={tz}
             tone="partner"
+            highlightedTeamIds={highlightedTeamIds}
+            highlightMatchId={highlightMatchId}
           />
         )}
       </Section>
@@ -137,9 +197,15 @@ export default async function ScoutPage() {
             now={now}
             tz={tz}
             tone="opponent"
+            highlightedTeamIds={highlightedTeamIds}
+            highlightMatchId={highlightMatchId}
           />
         )}
       </Section>
+
+      {firstHighlightedId ? (
+        <ScrollToTeam teamId={firstHighlightedId} />
+      ) : null}
     </div>
   );
 }
@@ -153,6 +219,8 @@ function TeamGrid({
   now,
   tz,
   tone,
+  highlightedTeamIds,
+  highlightMatchId,
 }: {
   teams: { id: number; number: string }[];
   myTeamId: number;
@@ -162,17 +230,29 @@ function TeamGrid({
   now: Date;
   tz: string | null;
   tone: "partner" | "opponent";
+  highlightedTeamIds: Set<number>;
+  highlightMatchId: number | null;
 }) {
   const sorted = [...teams].sort((a, b) =>
     a.number.localeCompare(b.number, undefined, { numeric: true }),
   );
+  const dimOthers = highlightedTeamIds.size > 0;
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {sorted.map((t) => {
         const sharedMatches = shared(t.id);
         const otherMatches = others(t.id);
+        const highlighted = highlightedTeamIds.has(t.id);
         return (
-          <div key={t.id} className="border border-line p-4 flex flex-col gap-4">
+          <div
+            key={t.id}
+            id={`team-${t.id}`}
+            className={`border p-4 flex flex-col gap-4 scroll-mt-32 transition-opacity ${
+              highlighted
+                ? "border-accent ring-2 ring-accent bg-subtle"
+                : "border-line"
+            } ${dimOthers && !highlighted ? "opacity-40" : ""}`}
+          >
             <div className="flex items-baseline justify-between gap-3">
               <span className="font-mono text-base font-semibold">
                 {t.number}
@@ -194,6 +274,7 @@ function TeamGrid({
                 notes={notes}
                 now={now}
                 tz={tz}
+                highlightMatchId={highlightMatchId}
                 includeSideBadge
               />
             ) : null}
@@ -205,6 +286,7 @@ function TeamGrid({
               notes={notes}
               now={now}
               tz={tz}
+              highlightMatchId={highlightMatchId}
               emptyLabel="No other matches at this event."
             />
           </div>
@@ -266,6 +348,7 @@ function MatchGroup({
   tz,
   emptyLabel,
   includeSideBadge,
+  highlightMatchId,
 }: {
   label: string;
   matches: MatchObj[];
@@ -275,6 +358,7 @@ function MatchGroup({
   tz: string | null;
   emptyLabel?: string;
   includeSideBadge?: boolean;
+  highlightMatchId?: number | null;
 }) {
   return (
     <div className="flex flex-col">
@@ -289,10 +373,13 @@ function MatchGroup({
             const note = notes.get(m.id);
             const side = includeSideBadge ? findTeamSide(m, myTeamId) : null;
             const past = isPast(m, now);
+            const isHighlight = highlightMatchId === m.id;
             return (
               <li
                 key={m.id}
-                className={`py-2 flex flex-col gap-2 ${past && !m.scored ? "opacity-60" : ""}`}
+                className={`py-2 px-2 -mx-2 flex flex-col gap-2 ${
+                  isHighlight ? "bg-bg ring-2 ring-accent" : ""
+                } ${past && !m.scored ? "opacity-60" : ""}`}
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="flex items-baseline gap-2 min-w-0">

@@ -96,6 +96,14 @@ export default async function UpcomingPage() {
                       side={side === "red" ? "blue" : side === "blue" ? "red" : null}
                     />
                   </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <Link
+                      href={`/dashboard/scout?highlight=${m.id}`}
+                      className="text-[10px] uppercase tracking-widest border border-line px-2 py-1 hover:bg-subtle transition-colors"
+                    >
+                      Scout this match →
+                    </Link>
+                  </div>
                   <div className="border-t border-line pt-3">
                     <MatchNotes
                       matchId={m.id}
